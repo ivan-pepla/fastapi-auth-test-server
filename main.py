@@ -212,7 +212,7 @@ async def root():
             "oauth2": {
                 "client_id": "test_client_id",
                 "client_secret": "test_client_secret",
-                "token_endpoint": "http://localhost:8000/oauth/token"
+                "token_endpoint": "http://localhost:10000/oauth/token"
             }
         }
     }
@@ -222,4 +222,4 @@ if __name__ == "__main__":
     print("Basic Auth - Username: testuser, Password: testpass123")
     print("API Key - X-API-KEY: test-api-key-12345")
     print("OAuth2 - Client ID: test_client_id, Client Secret: test_client_secret")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=10000)
