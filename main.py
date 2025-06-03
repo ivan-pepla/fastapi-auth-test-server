@@ -10,6 +10,7 @@ import secrets
 import jwt as pyjwt
 from datetime import datetime, timedelta
 import uvicorn
+import sys
 
 app = FastAPI(title="Authentication Test API")
 
@@ -69,24 +70,20 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias=API_KEY_HEADER)):
     return api_key
 
 def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security_bearer)):
-    """Verify JWT token authentication."""
+    print("\n--- DEBUG: verify_jwt_token called ---")
+    print("Raw Authorization header:", credentials.scheme, credentials.credentials)
     try:
         payload = pyjwt.decode(
             credentials.credentials, 
             JWT_SECRET, 
-            algorithms=[JWT_ALGORITHM]
+            algorithms=[JWT_ALGORITHM],
+            leeway=30  # allow 30 seconds clock skew
         )
+        print("Decoded JWT payload:", payload)
         return payload
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="Token has expired"
-        )
-    except pyjwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token"
-        )
+    except Exception as e:
+        print("JWT decode error:", str(e))
+        raise
 
 # Test endpoints for each authentication method
 
@@ -118,10 +115,19 @@ async def test_api_key_auth(
 
 @app.post("/test/oauth2", response_model=TestResponse)
 async def test_oauth2_auth(
+    request: Request,
     request_data: TestRequest,
     token_payload: Dict[str, Any] = Depends(verify_jwt_token)
 ):
-    """Test endpoint for OAuth2/JWT Authentication."""
+    print("\n--- DEBUG: /test/oauth2 called ---")
+    print("Request headers:")
+    for k, v in request.headers.items():
+        print(f"  {k}: {v}")
+    auth_header = request.headers.get('authorization')
+    print("Authorization header received:", auth_header)
+    print("Token payload:", token_payload)
+    print("Request body:", request_data.dict())
+    sys.stdout.flush()
     return TestResponse(
         message="OAuth2 authentication successful!",
         auth_method="OAuth2/JWT Authentication",
