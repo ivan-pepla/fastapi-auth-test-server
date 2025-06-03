@@ -77,7 +77,8 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             credentials.credentials, 
             JWT_SECRET, 
             algorithms=[JWT_ALGORITHM],
-            leeway=30  # allow 30 seconds clock skew
+            leeway=30,  # allow 30 seconds clock skew
+            audience="test-audience"  # specify the expected audience
         )
         print("Decoded JWT payload:", payload)
         return payload
