@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import base64
 import secrets
-import jwt
+import jwt as pyjwt
 from datetime import datetime, timedelta
 import uvicorn
 
@@ -71,18 +71,18 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias=API_KEY_HEADER)):
 def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security_bearer)):
     """Verify JWT token authentication."""
     try:
-        payload = jwt.decode(
+        payload = pyjwt.decode(
             credentials.credentials, 
             JWT_SECRET, 
             algorithms=[JWT_ALGORITHM]
         )
         return payload
-    except jwt.ExpiredSignatureError:
+    except pyjwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=401,
             detail="Token has expired"
         )
-    except jwt.InvalidTokenError:
+    except pyjwt.InvalidTokenError:
         raise HTTPException(
             status_code=401,
             detail="Invalid token"
@@ -142,7 +142,7 @@ async def generate_test_token(client_id: str = "test_client", scope: str = "read
         "aud": "test-audience"
     }
     
-    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     
     return {
         "access_token": token,
@@ -185,7 +185,7 @@ async def oauth_token_endpoint(request: Request):
         "aud": "test-audience"
     }
     
-    access_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    access_token = pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     
     return {
         "access_token": access_token,
