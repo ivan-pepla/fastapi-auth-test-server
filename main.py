@@ -30,22 +30,33 @@ JWT_ALGORITHM = "HS256"
 security_basic = HTTPBasic()
 security_bearer = HTTPBearer()
 
+
 class TestResponse(BaseModel):
     message: str
     auth_method: str
     user_info: Optional[Dict[str, Any]] = None
     request_data: Optional[Dict[str, Any]] = None
 
+
 class TestRequest(BaseModel):
     name: str
     data: Optional[Dict[str, Any]] = None
+
+
+class CryptoValueVoiceRequest(BaseModel):
+    crypto: str
+
+
+class CryptoValueVoiceResponse(BaseModel):
+    message: str
+
 
 # Helper functions
 def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security_basic)):
     """Verify basic authentication credentials."""
     is_correct_username = secrets.compare_digest(credentials.username, BASIC_USERNAME)
     is_correct_password = secrets.compare_digest(credentials.password, BASIC_PASSWORD)
-    
+
     if not (is_correct_username and is_correct_password):
         raise HTTPException(
             status_code=401,
@@ -54,31 +65,27 @@ def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security_basic
         )
     return credentials.username
 
+
 def verify_api_key(api_key: Optional[str] = Header(None, alias=API_KEY_HEADER)):
     """Verify pre-shared key authentication."""
     if not api_key:
-        raise HTTPException(
-            status_code=401,
-            detail=f"Missing {API_KEY_HEADER} header"
-        )
-    
+        raise HTTPException(status_code=401, detail=f"Missing {API_KEY_HEADER} header")
+
     if not secrets.compare_digest(api_key, VALID_API_KEY):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid API key"
-        )
+        raise HTTPException(status_code=401, detail="Invalid API key")
     return api_key
+
 
 def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security_bearer)):
     print("\n--- DEBUG: verify_jwt_token called ---")
     print("Raw Authorization header:", credentials.scheme, credentials.credentials)
     try:
         payload = pyjwt.decode(
-            credentials.credentials, 
-            JWT_SECRET, 
+            credentials.credentials,
+            JWT_SECRET,
             algorithms=[JWT_ALGORITHM],
             leeway=30,  # allow 30 seconds clock skew
-            audience="test-audience"  # specify the expected audience
+            audience="test-audience",  # specify the expected audience
         )
         print("Decoded JWT payload:", payload)
         return payload
@@ -86,55 +93,50 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
         print("JWT decode error:", str(e))
         raise
 
+
 # Test endpoints for each authentication method
 
+
+@app.post("/test/get-crypto-value", response_model=CryptoValueVoiceResponse)
+async def get_crypto_value(request_data: CryptoValueVoiceRequest):
+    """Test endpoint to get crypto value."""
+    return CryptoValueVoiceResponse(message=f"The value of {request_data.crypto} is 1600000 South African Rands.")
+
+
 @app.post("/test/basic-auth", response_model=TestResponse)
-async def test_basic_auth(
-    request_data: TestRequest,
-    username: str = Depends(verify_basic_auth)
-):
+async def test_basic_auth(request_data: TestRequest, username: str = Depends(verify_basic_auth)):
     """Test endpoint for Basic Authentication."""
     return TestResponse(
-        message="Basic authentication successful!",
-        auth_method="Basic Authentication",
-        user_info={"username": username},
-        request_data=request_data.dict()
+        message="Basic authentication successful!", auth_method="Basic Authentication", user_info={"username": username}, request_data=request_data.dict()
     )
 
+
 @app.post("/test/api-key", response_model=TestResponse)
-async def test_api_key_auth(
-    request_data: TestRequest,
-    api_key: str = Depends(verify_api_key)
-):
+async def test_api_key_auth(request_data: TestRequest, api_key: str = Depends(verify_api_key)):
     """Test endpoint for Pre-shared Key Authentication."""
     return TestResponse(
         message="API key authentication successful!",
         auth_method="Pre-shared Key Authentication",
         user_info={"api_key": api_key[:10] + "..."},  # Partial key for security
-        request_data=request_data.dict()
+        request_data=request_data.dict(),
     )
 
+
 @app.post("/test/oauth2", response_model=TestResponse)
-async def test_oauth2_auth(
-    request: Request,
-    request_data: TestRequest,
-    token_payload: Dict[str, Any] = Depends(verify_jwt_token)
-):
+async def test_oauth2_auth(request: Request, request_data: TestRequest, token_payload: Dict[str, Any] = Depends(verify_jwt_token)):
     print("\n--- DEBUG: /test/oauth2 called ---")
     print("Request headers:")
     for k, v in request.headers.items():
         print(f"  {k}: {v}")
-    auth_header = request.headers.get('authorization')
+    auth_header = request.headers.get("authorization")
     print("Authorization header received:", auth_header)
     print("Token payload:", token_payload)
     print("Request body:", request_data.dict())
     sys.stdout.flush()
     return TestResponse(
-        message="OAuth2 authentication successful!",
-        auth_method="OAuth2/JWT Authentication",
-        user_info=token_payload,
-        request_data=request_data.dict()
+        message="OAuth2 authentication successful!", auth_method="OAuth2/JWT Authentication", user_info=token_payload, request_data=request_data.dict()
     )
+
 
 # Helper endpoint to generate test JWT tokens
 @app.post("/auth/token")
@@ -146,42 +148,32 @@ async def generate_test_token(client_id: str = "test_client", scope: str = "read
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(hours=1),
         "iss": "test-auth-server",
-        "aud": "test-audience"
+        "aud": "test-audience",
     }
-    
+
     token = pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    
-    return {
-        "access_token": token,
-        "token_type": "Bearer",
-        "expires_in": 3600,
-        "scope": scope
-    }
+
+    return {"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": scope}
+
 
 # OAuth2 token endpoint (Client Credentials flow simulation)
 @app.post("/oauth/token")
 async def oauth_token_endpoint(request: Request):
     """Simulate OAuth2 token endpoint for client credentials flow."""
     form_data = await request.form()
-    
+
     # Validate client credentials
     client_id = form_data.get("client_id")
     client_secret = form_data.get("client_secret")
     grant_type = form_data.get("grant_type")
-    
+
     if grant_type != "client_credentials":
-        raise HTTPException(
-            status_code=400,
-            detail="unsupported_grant_type"
-        )
-    
+        raise HTTPException(status_code=400, detail="unsupported_grant_type")
+
     # Simple validation (in real implementation, check against database)
     if client_id != "test_client_id" or client_secret != "test_client_secret":
-        raise HTTPException(
-            status_code=401,
-            detail="invalid_client"
-        )
-    
+        raise HTTPException(status_code=401, detail="invalid_client")
+
     # Generate token
     payload = {
         "sub": client_id,
@@ -189,17 +181,13 @@ async def oauth_token_endpoint(request: Request):
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(hours=1),
         "iss": "test-auth-server",
-        "aud": "test-audience"
+        "aud": "test-audience",
     }
-    
+
     access_token = pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    
-    return {
-        "access_token": access_token,
-        "token_type": "Bearer",
-        "expires_in": 3600,
-        "scope": payload["scope"]
-    }
+
+    return {"access_token": access_token, "token_type": "Bearer", "expires_in": 3600, "scope": payload["scope"]}
+
 
 @app.get("/")
 async def root():
@@ -211,18 +199,15 @@ async def root():
             "api_key": "/test/api-key (X-API-KEY: test-api-key-12345)",
             "oauth2": "/test/oauth2 (get token from /oauth/token first)",
             "token_generator": "/auth/token (helper to generate JWT tokens)",
-            "oauth_endpoint": "/oauth/token (OAuth2 client credentials flow)"
+            "oauth_endpoint": "/oauth/token (OAuth2 client credentials flow)",
         },
         "test_credentials": {
             "basic_auth": {"username": BASIC_USERNAME, "password": BASIC_PASSWORD},
             "api_key": VALID_API_KEY,
-            "oauth2": {
-                "client_id": "test_client_id",
-                "client_secret": "test_client_secret",
-                "token_endpoint": "http://localhost:10000/oauth/token"
-            }
-        }
+            "oauth2": {"client_id": "test_client_id", "client_secret": "test_client_secret", "token_endpoint": "http://localhost:10000/oauth/token"},
+        },
     }
+
 
 if __name__ == "__main__":
     print("Starting Authentication Test API...")
